@@ -82,6 +82,14 @@ def get_path(parent: dict[int, int | None], tail: int) -> list[int]:
     return path[::-1]
 
 def st_path_fat(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t: int) -> list[int] | None:
+    """
+    Finds st path with max bottle neck
+    :param G: Graph represented as adjacency list
+    :param w: integral weight function
+    :param s: int source
+    :param t: int sink
+    :return: path as list of vertices
+    """
     edges = [x for (x,y) in w.items() if y != 0]
     edges.sort(key = lambda e: w[e], reverse=True)
 
