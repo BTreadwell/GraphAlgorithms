@@ -108,7 +108,6 @@ def st_path_fat(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t
         midpt = (upr + lwr) // 2
     return st_path_bfs(get_graph(edges[:upr]), w, s, t)
 
-
 def get_graph(edges: list[tuple[int, int]]) -> dict[int, set[int]]:
     """
     Get adjacency list from list of edges
@@ -119,7 +118,6 @@ def get_graph(edges: list[tuple[int, int]]) -> dict[int, set[int]]:
     for (u,v) in edges:
         G[u].add(v)
     return G
-
 
 def ek_short_pipe(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
     return _ford_fulkerson(G, c, s, t, st_path_bfs)
@@ -236,8 +234,6 @@ capacity5 = {
 testcases = [
     (graph1, capacity1), (graph2, capacity2), (graph3, capacity3), (graph4, capacity4), (graph5, capacity5)
 ]
-
-
 
 def main():
 
