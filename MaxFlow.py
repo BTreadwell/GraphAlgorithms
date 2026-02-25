@@ -1,39 +1,42 @@
-from collections import defaultdict
+import time
+from collections import defaultdict, deque
+from typing import Callable
 
-# Graph: given by adjacency list dict[int, set[int]]
-# Vertices: int
-# directed edges: tuple[int, int]
-# weight/caps/flow: dict[tuple[int, int], int]
-# assume no anti-parallel edges in G
+def _ford_fulkerson(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int, get_path: Callable) -> tuple[int, dict[tuple[int, int], int]]:
+    """
+    Ford-Fulkerson Max Flow implementation
+    :param G: Graph represented as an adjacency list
+    :param c: integral capacity function mapping directed edges to capacities
+    :param s: source vertex
+    :param t: sink vertex
+    :param get_path: function for finding st paths ("ek-fat-pipe" (default) or "ek-short-pipe")
+    :return: value of max flow (int) and flow values on each edge
+    """
+    flow, flow_value = defaultdict(int), 0
 
-
-
-def ford_fulkerson(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
-    flow = defaultdict(int)
-    value = 0
     resid_weights = update_weights(G, c, flow)
-
-    path = find_st_path(G, resid_weights, s, t)
+    path = get_path(G, resid_weights, s, t)
     while path is not None:
         path_amt = min([resid_weights[(path[i], path[i+1])] for i in range(len(path) - 1)])
-        value += path_amt
+        flow_value += path_amt
         for i in range(len(path) -1):
             u, v = path[i], path[i+1]
-
             if v in G[u]:
                 flow[(u, v)] += path_amt
-                assert flow[(u, v)] <= c[(u, v)]
             elif u in G[v]:
                 flow[(v, u)] -= path_amt
-                assert flow[(v, u)] >= 0
-            else:
-                raise Exception
         resid_weights = update_weights(G, c, flow)
-        path = find_st_path(G, resid_weights, s, t)
-
-    return value, flow
+        path = get_path(G, resid_weights, s, t)
+    return flow_value, flow
 
 def update_weights(G: dict[int, set[int]], c: dict[tuple[int, int], int], f: dict[tuple[int, int], int]) -> dict[tuple[int, int], int]:
+    """
+    Helper function for ford-fulkerson. Given flow and capacities, calculates edge weights in residual graph
+    :param G: Graph G represented as an adjacency list
+    :param c: Integral capcity function
+    :param f: current flow values
+    :return: weight function on residual graph
+    """
     weights = defaultdict(int)
     for u, endpoints in G.items():
         for v in endpoints:
@@ -41,29 +44,80 @@ def update_weights(G: dict[int, set[int]], c: dict[tuple[int, int], int], f: dic
             weights[(v, u)] = f[(u, v)]
     return weights
 
-def find_st_path(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t: int) -> list[int] | None:
+def st_path_bfs(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t: int) -> list[int] | None:
+    """
+    Finds an s,t path in G using BFS
+    :param G: Graph represented as adjacency list
+    :param w: weight function (only used so we don't take 0 edges)
+    :param s: int start point
+    :param t: int end point
+    :return: path represented as list of vertices or None if no st path exists
+    """
     parent: dict[int, int | None] = defaultdict(lambda: None)
-
     marked = set()
-    stack = [s]
-    while stack:
-        u = stack.pop()
+    queue = deque([s])
+    while queue:
+        u = queue.pop()
         marked.add(u)
         for v in G[u]:
-            if v not in marked:
-                if w[(u, v)] > 0:
-                    if v == t:
-                        path = [t]
-                        prev = u
-                        while prev is not None:
-                            path.append(prev)
-                            prev = parent[prev]
-                        return path[::-1]
-                    parent[v] = u
-                    stack.append(v)
+            if v not in marked and w[(u,v)] > 0:
+                parent[v] = u
+                if v == t:
+                    return get_path(parent, t)
+                queue.append(v)
     return None
 
+def get_path(parent: dict[int, int | None], tail: int) -> list[int]:
+    """
+    Returns path from head to tail
+    :param parent: list of predecessors
+    :param tail: end point of path
+    :return: path as list of vertices
+    """
+    path = [tail]
+    curr = parent[tail]
+    while curr is not None:
+        path.append(curr)
+        curr = parent[curr]
+    return path[::-1]
 
+def st_path_fat(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t: int) -> list[int] | None:
+    edges = [x for (x,y) in w.items() if y != 0]
+    edges.sort(key = lambda e: w[e], reverse=True)
+
+    if st_path_bfs(G, w, s, t) is None:
+        return None
+
+    lwr = 0
+    upr = len(edges)
+    midpt = (lwr + upr) // 2
+    while midpt != lwr:
+        G_e = get_graph(edges[:midpt])
+        if st_path_bfs(G_e, w, s, t) is not None:
+            upr = midpt
+        else:
+            lwr = midpt
+        midpt = (upr + lwr) // 2
+    return st_path_bfs(get_graph(edges[:upr]), w, s, t)
+
+
+def get_graph(edges: list[tuple[int, int]]) -> dict[int, set[int]]:
+    """
+    Get adjacency list from list of edges
+    :param edges: list of edges (int, int)
+    :return: adjacency list
+    """
+    G = defaultdict(set)
+    for (u,v) in edges:
+        G[u].add(v)
+    return G
+
+
+def ek_short_pipe(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
+    return _ford_fulkerson(G, c, s, t, st_path_bfs)
+
+def ek_fat_pipe(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
+    return _ford_fulkerson(G, c, s, t, st_path_fat)
 
 graph1 = {
     0: {1, 2},
@@ -174,9 +228,30 @@ capacity5 = {
 testcases = [
     (graph1, capacity1), (graph2, capacity2), (graph3, capacity3), (graph4, capacity4), (graph5, capacity5)
 ]
+
+
+
 def main():
-    for (g, c) in testcases:
-        print(ford_fulkerson(g, c, 0, max(g.keys())))
+
+    results = [] * len(testcases)
+    for i, (g, c) in enumerate(testcases):
+        r = []
+        start = time.perf_counter()
+        ans = ek_fat_pipe(g, c, 0, max(g.keys()))
+        end = time.perf_counter()
+        r.append(ans[0])
+        r.append(end - start)
+
+        start = time.perf_counter()
+        ans = ek_short_pipe(g, c, 0, max(g.keys()))
+        end = time.perf_counter()
+        r.append(ans[0])
+        r.append(end - start)
+
+        results.append(r)
+
+    for i, r in enumerate(results):
+        print(f"***Testcase {i}***\nFP Ans: {results[i][0]}\tFP Time: {results[i][1]}\nSP Ans: {results[i][2]}\tSP Time: {results[i][3]}")
 
 if __name__ == "__main__":
     main()
