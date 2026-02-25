@@ -12,9 +12,6 @@ def dfs_reach(G: Graph, s: int, marked: set[int] | None = None) -> set[int]:
                 marked = dfs(G, v, marked)
     return marked
 
-def dfs(G: Graph, s: int | Vertex):
-    
-
 def dfs(G: Graph, s: int, marked: set[int] | None =None, preorder: list[int] | None = None, postorder: list[int] | None = None) -> tuple[set[int], list[int], list[int]]:
     # dfs starting at node s, returns vertices reachable by s, dfs preorder, dfs postorder
     for v in G:
@@ -62,7 +59,4 @@ def conn_components(G: Graph) -> set[set[int]]:
             visited.update(c)
     return components
 
-def kosaraju_sharir(G: Graph) -> set[set[int]]:
-    # returns strongly connected components of a directed graph
-    # implements Kosaraju Sharir
 
