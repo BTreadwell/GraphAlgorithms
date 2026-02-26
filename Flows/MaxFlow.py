@@ -40,7 +40,7 @@ def update_weights(G: dict[int, set[int]], c: dict[tuple[int, int], int], f: dic
     weights = defaultdict(int)
     for u, endpoints in G.items():
         for v in endpoints:
-            weights[(u, v)] = max(0, c[(u, v)] - f[(u, v)])
+            weights[(u, v)] = c[(u, v)] - f[(u, v)]
             weights[(v, u)] = f[(u, v)]
     return weights
 
@@ -66,6 +66,18 @@ def st_path_bfs(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int, t
                     return get_path(parent, t)
                 queue.append(v)
     return None
+
+def shortest_path_lengths(G: dict[int, set[int]], w: dict[tuple[int, int], int], s: int) -> dict[int, int | None]:
+    sp_lengths = defaultdict(lambda: None)
+    queue = deque([(s, 0)])
+    while queue:
+        u, lvl = queue.pop()
+        sp_lengths[u] = lvl
+        for v in G[u]:
+            if sp_lengths[v] is None and w[(u, v)] > 0:
+                queue.append((v, lvl + 1))
+    return sp_lengths
+
 
 def get_path(parent: dict[int, int | None], tail: int) -> list[int]:
     """
@@ -119,11 +131,52 @@ def get_graph(edges: list[tuple[int, int]]) -> dict[int, set[int]]:
         G[u].add(v)
     return G
 
+def get_blocking_flow(G, resid_weights, sp_dists, s, t):
+    val, blocking_flow = 0, defaultdict(int)
+
+    parent: dict[int, int | None] = defaultdict(lambda: None)
+
+    stack = [s]
+    while stack:
+        u = stack.pop()
+        if u == t:
+            p = get_path(parent, t)
+            bottleneck_val = min([resid_weights[(p[i], p[i+1])] for i in range(len(p) - 1)])
+            val += bottleneck_val
+            for i in range(len(p) - 1):
+                resid_weights[p[i], p[i + 1]] -= bottleneck_val
+                resid_weights[p[i+1], p[i]] += bottleneck_val
+                if resid_weights[p[i], p[i+1]] == 0:
+                    parent[p[i + 1]] = None
+                if (i+1) in G[i]:
+                    blocking_flow[(i, i+1)] += bottleneck_val
+                else:
+                    blocking_flow[(i+1, i)] -= bottleneck_val
+        else:
+            for v in G[u]:
+                if parent[v] is None and resid_weights[(u, v)] > 0 and sp_dists[v] - 1 == sp_dists[u]:
+                    parent[v] = u
+                    stack.append(v)
+
+    return val, blocking_flow
+
 def ek_short_pipe(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
     return _ford_fulkerson(G, c, s, t, st_path_bfs)
 
 def ek_fat_pipe(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
     return _ford_fulkerson(G, c, s, t, st_path_fat)
+
+def dinics(G: dict[int, set[int]], c: dict[tuple[int, int], int], s: int, t: int) -> tuple[int, dict[tuple[int, int], int]]:
+    max_val, flow = 0, defaultdict(int)
+    resid_weights = update_weights(G, c, flow)
+    sp_dists = shortest_path_lengths(G, resid_weights, s)
+    val, blocking_flow = get_blocking_flow(G, resid_weights, sp_dists, s, t)
+    while val > 0:
+        max_val += val
+        #resid_weights = update_weights(G, c, flow)
+        val, blocking_flow = get_blocking_flow(G, resid_weights, sp_dists, s, t)
+    return max_val, flow
+
 
 graph1 = {
     0: {1, 2},
@@ -252,10 +305,16 @@ def main():
         r.append(ans[0])
         r.append(end - start)
 
+        start = time.perf_counter()
+        ans = dinics(g, c, 0, max(g.keys()))
+        end = time.perf_counter()
+        r.append(ans[0])
+        r.append(end - start)
+
         results.append(r)
 
     for i, r in enumerate(results):
-        print(f"***Testcase {i}***\nFP Ans: {results[i][0]}\tFP Time: {results[i][1]}\nSP Ans: {results[i][2]}\tSP Time: {results[i][3]}")
+        print(f"***Testcase {i}***\nFP Ans: {results[i][0]}\tFP Time: {results[i][1]}\nSP Ans: {results[i][2]}\tSP Time: {results[i][3]}\nDN Ans: {results[i][4]}\tDN Time: {results[i][5]}")
 
 if __name__ == "__main__":
     main()
